@@ -12,10 +12,10 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/err.h>
+#include "fcm_token.h"
 
 #define MAX_TOKEN_SIZE 2048
 #define MAX_JWT_SIZE 4096
-#define MAX_RESPONSE_SIZE 8192
 
 // Structure pour stocker la réponse HTTP
 struct APIResponse {
@@ -41,7 +41,7 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, struct AP
 }
 
 // Fonction pour encoder en Base64 URL-safe
-char* base64_url_encode(const unsigned char* input, int length) {
+static char* base64_url_encode(const unsigned char* input, int length) {
     BIO *bio, *b64;
     BUF_MEM *bufferPtr;
     
@@ -75,7 +75,7 @@ char* base64_url_encode(const unsigned char* input, int length) {
 }
 
 // Fonction pour signer avec RSA SHA256
-char* sign_jwt(const char* message, EVP_PKEY* private_key) {
+static char* sign_jwt(const char* message, EVP_PKEY* private_key) {
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
     if (!mdctx) return NULL;
     
@@ -111,7 +111,7 @@ char* sign_jwt(const char* message, EVP_PKEY* private_key) {
 }
 
 // Fonction pour créer le JWT
-char* create_jwt(const char* client_email, const char* private_key_str) {
+static char* create_jwt(const char* client_email, const char* private_key_str) {
     if (!client_email || !private_key_str) {
         printf("Erreur: paramètres NULL\n");
         return NULL;
@@ -221,7 +221,7 @@ char* create_jwt(const char* client_email, const char* private_key_str) {
 }
 
 // Fonction pour extraire le token d'accès de la réponse JSON
-char* extract_access_token(const char* json_response) {
+static char* extract_access_token(const char* json_response) {
     json_object *root = json_tokener_parse(json_response);
     if (!root) return NULL;
     
@@ -240,6 +240,15 @@ char* extract_access_token(const char* json_response) {
 
 // Fonction principale pour obtenir le token OAuth2
 char* get_fcm_oauth_token(const char* service_account_file) {
+    // Vérifier que le fichier de service account existe
+    FILE *test_file = fopen(service_account_file, "r");
+    if (!test_file) {
+        printf("Erreur: fichier %s introuvable\n", service_account_file);
+        printf("Assurez-vous que le fichier JSON du compte de service est présent.\n");
+        return NULL;
+    }
+    fclose(test_file);
+    
     // Lire le fichier JSON du compte de service
     FILE *file = fopen(service_account_file, "r");
     if (!file) {
@@ -330,33 +339,4 @@ char* get_fcm_oauth_token(const char* service_account_file) {
     free(response.data);
     
     return access_token;
-}
-
-// Fonction d'exemple d'utilisation
-int main() {
-    // Vérifier que le fichier existe
-    FILE *test_file = fopen("door-close-reminder-79f888941429.json", "r");
-    if (!test_file) {
-        printf("Erreur: fichier door-close-reminder-79f888941429.json introuvable\n");
-        return 1;
-    }
-    fclose(test_file);
-    
-    // Initialiser OpenSSL et libcurl
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-    
-    // Obtenir le token
-    char* token = get_fcm_oauth_token("door-close-reminder-79f888941429.json");
-    
-    if (token) {
-        printf("%s\n", token);
-        free(token);
-    } else {
-        printf("Erreur: impossible d'obtenir le token\n");
-        curl_global_cleanup();
-        return 1;
-    }
-    
-    curl_global_cleanup();
-    return 0;
 }
