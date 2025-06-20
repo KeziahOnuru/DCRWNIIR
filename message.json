@@ -1,0 +1,12 @@
+{
+  "message": {
+    "token": "fr16uYX2SyGQ6oxVja-iRU:APA91bEiOPvAycPo9Izr3HCNcPAS5qpv0tV0f1sPFhNSypTv36pg1fOMTqzKj4xU-XjpDNyZ7SsXyezQqjNT4FUo-GxEAjfnRs2bWYmM0G9eXb0l2yY9Sh4",
+    "notification": {
+      "title": "Salut",
+      "body": "BONSOIR A TOI"
+    },
+    "data": {
+      "type": "salutation"
+    }
+  }
+}
