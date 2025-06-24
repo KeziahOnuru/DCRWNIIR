@@ -10,7 +10,7 @@ object TokenStorage {
     private const val TOKEN_KEY = "fcm_token"
     private const val TOKEN_TIMESTAMP_KEY = "fcm_token_timestamp"
 
-    // Token valide pendant 7 jours
+    // Token is valid for 7 days
     private const val TOKEN_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000L
 
     fun saveToken(context: Context, token: String) {
@@ -23,9 +23,9 @@ object TokenStorage {
                 .putLong(TOKEN_TIMESTAMP_KEY, currentTime)
                 .apply()
 
-            Log.d(TAG, "Token FCM sauvegardé")
+            Log.d(TAG, "FCM token saved")
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur sauvegarde token", e)
+            Log.e(TAG, "Error saving token", e)
         }
     }
 
@@ -40,7 +40,7 @@ object TokenStorage {
                 if (age < TOKEN_VALIDITY_MS) {
                     token
                 } else {
-                    Log.w(TAG, "Token FCM expiré")
+                    Log.w(TAG, "FCM token expired")
                     clearToken(context)
                     null
                 }
@@ -48,7 +48,7 @@ object TokenStorage {
                 null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur récupération token", e)
+            Log.e(TAG, "Error retrieving token", e)
             null
         }
     }
@@ -60,9 +60,9 @@ object TokenStorage {
                 .remove(TOKEN_KEY)
                 .remove(TOKEN_TIMESTAMP_KEY)
                 .apply()
-            Log.d(TAG, "Token FCM effacé")
+            Log.d(TAG, "FCM token cleared")
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur effacement token", e)
+            Log.e(TAG, "Error clearing token", e)
         }
     }
 

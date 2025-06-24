@@ -56,10 +56,10 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            Log.d(TAG, "Bluetooth activé")
+            Log.d(TAG, "Bluetooth enabled")
             startBluetoothService()
         } else {
-            Log.w(TAG, "Activation Bluetooth refusée")
+            Log.w(TAG, "Bluetooth activation denied")
         }
     }
 
@@ -68,10 +68,10 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         val allGranted = permissions.all { it.value }
         if (allGranted) {
-            Log.d(TAG, "Permissions Bluetooth accordées")
+            Log.d(TAG, "Bluetooth permissions granted")
             checkBluetoothAndStart()
         } else {
-            Log.w(TAG, "Permissions Bluetooth refusées")
+            Log.w(TAG, "Bluetooth permissions denied")
         }
     }
 
@@ -80,9 +80,9 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         val allGranted = permissions.all { it.value }
         if (allGranted) {
-            Log.d(TAG, "Permissions notifications accordées")
+            Log.d(TAG, "Notification permissions granted")
         } else {
-            Log.w(TAG, "Permissions notifications refusées")
+            Log.w(TAG, "Notification permissions denied")
         }
     }
 
@@ -90,10 +90,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Initialiser les managers
+        // Initialize managers
         fcmManager = FCMManager(this)
 
-        // Configuration
+        // Setup
         setupNotificationPermissions()
         setupFCM()
         setupBluetooth()
@@ -123,13 +123,13 @@ class MainActivity : ComponentActivity() {
 
     private fun setupFCM() {
         fcmManager.initialize { token ->
-            Log.d(TAG, "Token FCM prêt: ${token.take(20)}...")
+            Log.d(TAG, "FCM token ready: ${token.take(20)}...")
         }
     }
 
     private fun setupBluetooth() {
         if (bluetoothAdapter == null) {
-            Log.e(TAG, "Bluetooth non supporté")
+            Log.e(TAG, "Bluetooth not supported")
             return
         }
 
@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (missingPermissions.isNotEmpty()) {
-            Log.d(TAG, "Demande permissions Bluetooth")
+            Log.d(TAG, "Requesting Bluetooth permissions")
             bluetoothPermissionLauncher.launch(missingPermissions.toTypedArray())
         } else {
             checkBluetoothAndStart()
@@ -153,14 +153,14 @@ class MainActivity : ComponentActivity() {
         if (bluetoothAdapter?.isEnabled == true) {
             startBluetoothService()
         } else {
-            Log.d(TAG, "Demande activation Bluetooth")
+            Log.d(TAG, "Requesting Bluetooth activation")
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             enableBluetoothLauncher.launch(enableBtIntent)
         }
     }
 
     private fun startBluetoothService() {
-        Log.d(TAG, "Démarrage service Bluetooth")
+        Log.d(TAG, "Starting Bluetooth service")
         val serviceIntent = Intent(this, BluetoothAutoConnectService::class.java)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -171,9 +171,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun testDirectConnection(useRFCOMM: Boolean) {
-        Log.d(TAG, "Test manuel: ${if (useRFCOMM) "RFCOMM" else "L2CAP"}")
+        Log.d(TAG, "Manual test: ${if (useRFCOMM) "RFCOMM" else "L2CAP"}")
 
-        // Envoyer commande au service
+        // Send command to service
         val intent = Intent(this, BluetoothAutoConnectService::class.java).apply {
             putExtra("action", "test_connection")
             putExtra("use_rfcomm", useRFCOMM)
@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopBluetoothService() {
-        Log.d(TAG, "Arrêt service Bluetooth")
+        Log.d(TAG, "Stopping Bluetooth service")
         val serviceIntent = Intent(this, BluetoothAutoConnectService::class.java)
         stopService(serviceIntent)
     }
@@ -199,7 +199,7 @@ class MainActivity : ComponentActivity() {
         var notificationPermissions by remember { mutableStateOf(checkNotificationPermissions()) }
         var fcmToken by remember { mutableStateOf(TokenStorage.getToken(this@MainActivity)) }
 
-        // Mise à jour périodique des statuts
+        // Periodic status update
         LaunchedEffect(Unit) {
             while (true) {
                 bluetoothEnabled = bluetoothAdapter?.isEnabled ?: false
@@ -224,46 +224,45 @@ class MainActivity : ComponentActivity() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Statut Bluetooth
+            // Bluetooth status
             StatusCard(
                 title = "Bluetooth",
-                status = if (bluetoothEnabled) "Activé" else "Désactivé",
+                status = if (bluetoothEnabled) "Enabled" else "Disabled",
                 isOk = bluetoothEnabled,
-                details = "Nécessaire pour la connexion automatique"
+                details = "Required for automatic connection"
             )
 
-            // Statut Permissions Bluetooth
+            // Bluetooth permissions
             StatusCard(
-                title = "Permissions Bluetooth",
-                status = if (bluetoothPermissions) "Accordées" else "Manquantes",
+                title = "Bluetooth Permissions",
+                status = if (bluetoothPermissions) "Granted" else "Missing",
                 isOk = bluetoothPermissions,
-                details = "Scan et connexion Bluetooth + localisation"
+                details = "Bluetooth scan & connection + location"
             )
 
-            // Statut Notifications
+            // Notification permissions
             StatusCard(
                 title = "Notifications",
-                status = if (notificationPermissions) "Activées" else "Désactivées",
+                status = if (notificationPermissions) "Enabled" else "Disabled",
                 isOk = notificationPermissions,
-                details = "Pour les messages FCM"
+                details = "Required for FCM messages"
             )
 
-            // Statut Token FCM
-            val tokenValue = fcmToken // Store in local variable for smart cast
+            // FCM token status
+            val tokenValue = fcmToken
             StatusCard(
-                title = "Token FCM",
-                status = if (tokenValue != null) "Disponible" else "En attente",
+                title = "FCM Token",
+                status = if (tokenValue != null) "Available" else "Pending",
                 isOk = tokenValue != null,
                 details = if (tokenValue != null) {
                     "Token: ${tokenValue.take(20)}..."
                 } else {
-                    "Le token sera envoyé lors de la connexion"
+                    "The token will be sent upon connection"
                 }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Boutons d'action
             val allReady = bluetoothEnabled && bluetoothPermissions && notificationPermissions
 
             if (!allReady) {
@@ -275,7 +274,7 @@ class MainActivity : ComponentActivity() {
                         Button(
                             onClick = { setupBluetooth() }
                         ) {
-                            Text("Configurer Bluetooth")
+                            Text("Setup Bluetooth")
                         }
                     }
 
@@ -283,7 +282,7 @@ class MainActivity : ComponentActivity() {
                         Button(
                             onClick = { setupNotificationPermissions() }
                         ) {
-                            Text("Activer Notifications")
+                            Text("Enable Notifications")
                         }
                     }
                 }
@@ -293,25 +292,25 @@ class MainActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "✓ Configuration complète",
+                        text = "✓ Setup complete",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
 
                     Text(
-                        text = "Service actif - Recherche serveur toutes les 60s",
+                        text = "Service active – Scanning every 60s",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
 
-                    // Boutons de contrôle du service
+                    // Service control buttons
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = { startBluetoothService() }
                         ) {
-                            Text("Démarrer Service")
+                            Text("Start Service")
                         }
 
                         Button(
@@ -320,13 +319,13 @@ class MainActivity : ComponentActivity() {
                                 containerColor = MaterialTheme.colorScheme.error
                             )
                         ) {
-                            Text("Arrêter Service")
+                            Text("Stop Service")
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Section Tests de Connexion
+                    // Connection test section
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -339,12 +338,12 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Tests de Connexion",
+                                text = "Connection Tests",
                                 style = MaterialTheme.typography.titleMedium
                             )
 
                             Text(
-                                text = "Tester la connexion directe au serveur",
+                                text = "Test direct connection to the server",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -368,14 +367,14 @@ class MainActivity : ComponentActivity() {
                             }
 
                             Text(
-                                text = "Surveillez les logs pour voir les résultats",
+                                text = "Check logs for test results",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
                     }
 
-                    // Informations de debug
+                    // Debug information
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -386,12 +385,12 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                text = "Informations Debug",
+                                text = "Debug Info",
                                 style = MaterialTheme.typography.titleSmall
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "• Serveur cible: DCRWNIIR\n• PSM L2CAP: 0x1003\n• RFCOMM UUID: 00001101...\n• Adresse serveur: C8:8A:9A:85:44:BC",
+                                text = "• Target server: DCRWNIIR\n• L2CAP PSM: 0x1003\n• RFCOMM UUID: 00001101...\n• Server address: C8:8A:9A:85:44:BC",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                             )
@@ -464,7 +463,7 @@ class MainActivity : ComponentActivity() {
                 ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
             }
         } else {
-            true // Pas de permissions requises sur les anciennes versions
+            true // No permissions required on older versions
         }
     }
 }

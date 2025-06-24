@@ -25,52 +25,51 @@ class BluetoothAutoConnectService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Service créé")
+        Log.d(TAG, "Service created")
 
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification("Initialisation..."))
+        startForeground(NOTIFICATION_ID, createNotification("Initializing..."))
 
-        // Acquérir un wake lock partiel pour maintenir le service
+        // Acquire partial wake lock to maintain service
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "BluetoothService::WakeLock"
         )
-        wakeLock?.acquire(60*60*1000L) // 1 heure max
+        wakeLock?.acquire(60*60*1000L) // 1 hour max
 
         setupBluetoothManager()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Service démarré")
+        Log.d(TAG, "Service started")
 
-        // Vérifier si c'est une commande de test
+        // Check if it's a test command
         val action = intent?.getStringExtra("action")
         if (action == "test_connection") {
-            val useRFCOMM = intent.getBooleanExtra("use_rfcomm", false)
-            Log.d(TAG, "Commande de test reçue: ${if (useRFCOMM) "RFCOMM" else "L2CAP"}")
-            updateNotification("Test ${if (useRFCOMM) "RFCOMM" else "L2CAP"} en cours...")
+            Log.d(TAG, "Test command received: RFCOMM")
+            updateNotification("RFCOMM test in progress...")
 
             serviceScope.launch {
-                bluetoothManager.testDirectConnection(useRFCOMM)
+                bluetoothManager.testDirectConnection(useRFCOMM = true)
                 delay(5000)
-                updateNotification("Test terminé - Mode normal")
+                updateNotification("Test completed - Normal mode")
             }
             return START_STICKY
         }
 
-        // Lancer le test automatique après un délai (seulement au premier démarrage)
+        // Launch automatic test after delay (only on first start)
         serviceScope.launch {
-            delay(5000) // Attendre 5 secondes après le démarrage
+            delay(5000) // Wait 5 seconds after startup
             launchDirectTest()
         }
 
-        return START_STICKY // Redémarrer automatiquement si tué
+        return START_STICKY // Restart automatically if killed
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "Service détruit")
+        Log.d(TAG, "Service destroyed")
 
         bluetoothManager.cleanup()
         serviceScope.cancel()
@@ -88,43 +87,37 @@ class BluetoothAutoConnectService : Service() {
         bluetoothManager = BluetoothManager(this)
 
         bluetoothManager.onDeviceConnected = { device ->
-            Log.i(TAG, "Device connecté: ${device.address}")
-            updateNotification("Connecté à ${device.address}")
+            Log.i(TAG, "Device connected: ${device.address}")
+            updateNotification("Connected to ${device.address}")
         }
 
         bluetoothManager.onConnectionFailed = { error ->
-            Log.w(TAG, "Connexion échouée: $error")
-            updateNotification("Recherche en cours... ($error)")
+            Log.w(TAG, "Connection failed: $error")
+            updateNotification("Searching... ($error)")
         }
 
         bluetoothManager.initialize()
-        updateNotification("Recherche du serveur...")
+        updateNotification("Searching for server...")
     }
 
     private fun launchDirectTest() {
-        Log.d(TAG, "=== LANCEMENT TEST DIRECT ===")
-        updateNotification("Test de connexion directe...")
+        Log.d(TAG, "=== LAUNCHING DIRECT TEST ===")
+        updateNotification("Direct connection test...")
 
         serviceScope.launch {
             try {
-                // Test L2CAP d'abord
-                Log.d(TAG, "🧪 Test connexion L2CAP...")
-                updateNotification("Test L2CAP...")
-                bluetoothManager.testDirectConnection(useRFCOMM = false)
-
-                // Attendre un peu puis tester RFCOMM
-                delay(10000)
-                Log.d(TAG, "🧪 Test connexion RFCOMM...")
-                updateNotification("Test RFCOMM...")
+                // Test RFCOMM
+                Log.d(TAG, "🧪 Testing RFCOMM connection...")
+                updateNotification("Testing RFCOMM...")
                 bluetoothManager.testDirectConnection(useRFCOMM = true)
 
-                // Retour au mode normal après les tests
+                // Return to normal mode after test
                 delay(10000)
-                updateNotification("Tests terminés - Mode normal")
+                updateNotification("Test completed - Normal mode")
 
             } catch (e: Exception) {
-                Log.e(TAG, "Erreur lors des tests", e)
-                updateNotification("Tests échoués - Mode normal")
+                Log.e(TAG, "Error during tests", e)
+                updateNotification("Test failed - Normal mode")
             }
         }
     }
@@ -133,10 +126,10 @@ class BluetoothAutoConnectService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Service Bluetooth",
+                "Bluetooth Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Service de connexion automatique Bluetooth"
+                description = "Bluetooth auto-connect service"
                 setShowBadge(false)
             }
 
