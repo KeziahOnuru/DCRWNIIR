@@ -1,4 +1,4 @@
-package com.example.test.bluetooth
+package com.example.test
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -13,12 +13,18 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import kotlinx.coroutines.*
 import java.io.IOException
+import java.util.*
 
 class BluetoothManager(private val context: Context) {
 
     private val TAG = "BluetoothManager"
     private val TARGET_NAME = "DCRWNIIR"
-    private val PSM = 0x1003
+    private val PSM_L2CAP = 0x1003
+    private val RFCOMM_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+    // Alternative UUIDs à tester
+    private val RFCOMM_UUID_ALTERNATIVE = UUID.fromString("00001105-0000-1000-8000-00805F9B34FB") // OBEX
+    private val RFCOMM_UUID_SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Serial Port Profile
 
     // Configuration optimisée pour économiser la batterie
     private val SCAN_INTERVAL_MS = 60_000L // 1 minute au lieu de 5 secondes
@@ -179,10 +185,14 @@ class BluetoothManager(private val context: Context) {
         if (!hasBluetoothPermissions()) return
 
         val deviceName = try { device.name } catch (e: SecurityException) { "Unknown" }
+        val deviceAddress = device.address
 
-        // Log plus discret pour éviter le spam
+        // Log TOUS les devices trouvés pour debug
+        Log.d(TAG, "Device trouvé: '$deviceName' ($deviceAddress)")
+
+        // Vérification du nom cible
         if (deviceName?.contains(TARGET_NAME, ignoreCase = true) == true) {
-            Log.i(TAG, "Serveur cible trouvé: $deviceName - ${device.address}")
+            Log.i(TAG, "✓ Serveur cible trouvé: $deviceName - $deviceAddress")
             stopActiveScanning() // Arrêter immédiatement pour économiser
 
             when (device.bondState) {
@@ -198,6 +208,8 @@ class BluetoothManager(private val context: Context) {
                     Log.d(TAG, "Appairage en cours")
                 }
             }
+        } else {
+            Log.v(TAG, "Device ignoré: '$deviceName' ne correspond pas à '$TARGET_NAME'")
         }
     }
 
@@ -247,8 +259,10 @@ class BluetoothManager(private val context: Context) {
                     return@launch
                 }
 
-                Log.d(TAG, "Tentative connexion L2CAP (essai ${connectionRetries + 1}/$MAX_CONNECTION_RETRIES)")
-                val success = connectToL2CAP(device)
+                Log.d(TAG, "Tentative connexion (essai ${connectionRetries + 1}/$MAX_CONNECTION_RETRIES)")
+
+                // Essayer L2CAP d'abord, puis RFCOMM si échec
+                val success = connectToL2CAP(device) || connectToRFCOMM(device)
 
                 if (success) {
                     onDeviceConnected?.invoke(device)
@@ -285,36 +299,37 @@ class BluetoothManager(private val context: Context) {
 
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "=== DÉBUT CONNEXION L2CAP ===")
+                Log.d(TAG, "=== TENTATIVE L2CAP ===")
                 Log.d(TAG, "Device: ${device.address}")
-                Log.d(TAG, "PSM: 0x${PSM.toString(16)} ($PSM)")
+                Log.d(TAG, "PSM: 0x${PSM_L2CAP.toString(16)} ($PSM_L2CAP)")
                 Log.d(TAG, "Bond state: ${device.bondState}")
+                Log.d(TAG, "Android version: ${android.os.Build.VERSION.SDK_INT}")
 
                 // Arrêter le scan pendant la connexion pour éviter les interférences
                 stopActiveScanning()
 
                 // Créer le socket L2CAP
-                socket = device.createL2capChannel(PSM)
+                socket = device.createL2capChannel(PSM_L2CAP)
                 Log.d(TAG, "Socket L2CAP créé avec succès")
 
                 // Connexion avec timeout
                 val connectJob = async {
                     socket?.connect()
-                    Log.i(TAG, "socket.connect() terminé avec succès")
+                    Log.i(TAG, "L2CAP socket.connect() terminé avec succès")
                 }
 
                 // Attendre la connexion avec timeout
                 withTimeoutOrNull(CONNECTION_TIMEOUT_MS) {
                     connectJob.await()
                 } ?: run {
-                    Log.e(TAG, "Timeout de connexion après ${CONNECTION_TIMEOUT_MS}ms")
+                    Log.e(TAG, "Timeout L2CAP après ${CONNECTION_TIMEOUT_MS}ms")
                     connectJob.cancel()
                     return@withContext false
                 }
 
                 // Vérifier l'état de la connexion
                 if (socket?.isConnected == true) {
-                    Log.i(TAG, "Connexion L2CAP établie avec succès!")
+                    Log.i(TAG, "✓ Connexion L2CAP établie avec succès!")
 
                     // Envoyer token FCM au serveur
                     sendFCMTokenToServer(socket)
@@ -329,55 +344,173 @@ class BluetoothManager(private val context: Context) {
                 }
 
             } catch (e: IOException) {
-                Log.e(TAG, "IOException lors de la connexion L2CAP", e)
-                Log.e(TAG, "Message d'erreur: ${e.message}")
-                Log.e(TAG, "Cause: ${e.cause}")
+                Log.e(TAG, "IOException L2CAP: ${e.message}", e)
 
                 // Détails spécifiques selon le message d'erreur
                 when {
                     e.message?.contains("Connection refused") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Serveur refuse la connexion - vérifiez qu'il écoute sur PSM $PSM")
+                        Log.e(TAG, "DIAGNOSTIC: Serveur refuse la connexion L2CAP")
                     }
                     e.message?.contains("Host is down") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Serveur inaccessible - vérifiez qu'il est démarré")
-                    }
-                    e.message?.contains("Permission denied") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Permission refusée - vérifiez les permissions")
-                    }
-                    e.message?.contains("Service discovery failed") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Service non trouvé - PSM $PSM incorrect ?")
+                        Log.e(TAG, "DIAGNOSTIC: Serveur L2CAP inaccessible")
                     }
                     e.message?.contains("read failed") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Échec lecture socket - connexion fermée côté serveur")
+                        Log.e(TAG, "DIAGNOSTIC: Échec lecture L2CAP - serveur fermé ?")
                     }
-                    else -> {
-                        Log.e(TAG, "DIAGNOSTIC: Erreur inconnue - vérifiez serveur et configuration")
+                    e.message?.contains("Service discovery failed") == true -> {
+                        Log.e(TAG, "DIAGNOSTIC: Service L2CAP non trouvé")
                     }
                 }
                 false
 
             } catch (e: SecurityException) {
-                Log.e(TAG, "SecurityException - Permission L2CAP manquante", e)
-                false
-
-            } catch (e: IllegalArgumentException) {
-                Log.e(TAG, "IllegalArgumentException - PSM invalide ou device invalide", e)
-                Log.e(TAG, "PSM utilisé: $PSM (0x${PSM.toString(16)})")
+                Log.e(TAG, "SecurityException L2CAP", e)
                 false
 
             } catch (e: Exception) {
-                Log.e(TAG, "Exception inattendue", e)
+                Log.e(TAG, "Exception L2CAP inattendue", e)
                 false
 
             } finally {
-                Log.d(TAG, "=== FIN TENTATIVE CONNEXION ===")
                 try {
                     socket?.close()
-                    Log.d(TAG, "Socket fermé")
+                    Log.d(TAG, "Socket L2CAP fermé")
                 } catch (e: IOException) {
-                    Log.e(TAG, "Erreur fermeture socket", e)
+                    Log.e(TAG, "Erreur fermeture socket L2CAP", e)
                 }
             }
+        }
+    }
+
+    private suspend fun connectToRFCOMM(device: BluetoothDevice): Boolean {
+        if (!hasBluetoothPermissions()) return false
+
+        var socket: BluetoothSocket? = null
+
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "=== TENTATIVE RFCOMM ===")
+                Log.d(TAG, "Device: ${device.address}")
+                Log.d(TAG, "UUID: $RFCOMM_UUID")
+
+                // Essayer plusieurs méthodes de connexion RFCOMM
+                val methods = listOf(
+                    "createRfcommSocketToServiceRecord" to { device.createRfcommSocketToServiceRecord(RFCOMM_UUID) },
+                    "createInsecureRfcommSocketToServiceRecord" to { device.createInsecureRfcommSocketToServiceRecord(RFCOMM_UUID) },
+                    "createRfcommSocket (canal 1)" to { createRfcommSocketReflection(device, 1) },
+                    "createRfcommSocket (canal 3)" to { createRfcommSocketReflection(device, 3) }
+                )
+
+                for ((methodName, socketCreator) in methods) {
+                    try {
+                        Log.d(TAG, "Essai méthode: $methodName")
+                        socket = socketCreator()
+
+                        if (socket == null) {
+                            Log.w(TAG, "Socket null avec $methodName")
+                            continue
+                        }
+
+                        Log.d(TAG, "Socket RFCOMM créé avec $methodName")
+
+                        // Connexion avec timeout
+                        val connectJob = async {
+                            socket?.connect()
+                            Log.i(TAG, "RFCOMM socket.connect() terminé avec $methodName")
+                        }
+
+                        // Attendre la connexion avec timeout
+                        val connectSuccess = withTimeoutOrNull(CONNECTION_TIMEOUT_MS) {
+                            connectJob.await()
+                            true
+                        } ?: run {
+                            Log.e(TAG, "Timeout RFCOMM avec $methodName après ${CONNECTION_TIMEOUT_MS}ms")
+                            connectJob.cancel()
+                            false
+                        }
+
+                        if (!connectSuccess) {
+                            socket?.close()
+                            socket = null
+                            continue
+                        }
+
+                        // Vérifier l'état de la connexion
+                        if (socket?.isConnected == true) {
+                            Log.i(TAG, "✓ Connexion RFCOMM établie avec $methodName !")
+
+                            // Test de communication
+                            val testMessage = "PING"
+                            socket?.outputStream?.write(testMessage.toByteArray())
+                            socket?.outputStream?.flush()
+                            Log.d(TAG, "Message test envoyé: $testMessage")
+
+                            // Lire réponse
+                            val buffer = ByteArray(1024)
+                            val bytesRead = withTimeoutOrNull(5000) {
+                                socket?.inputStream?.read(buffer) ?: 0
+                            } ?: 0
+
+                            if (bytesRead > 0) {
+                                val response = String(buffer, 0, bytesRead)
+                                Log.d(TAG, "Réponse RFCOMM reçue: $response")
+                            }
+
+                            // Envoyer token FCM au serveur
+                            sendFCMTokenToServer(socket)
+
+                            // Maintenir connexion pour test
+                            delay(10000)
+
+                            return@withContext true
+                        } else {
+                            Log.e(TAG, "socket.isConnected = false après connect() avec $methodName")
+                            socket?.close()
+                            socket = null
+                        }
+
+                    } catch (e: IOException) {
+                        Log.e(TAG, "IOException RFCOMM avec $methodName: ${e.message}")
+                        socket?.close()
+                        socket = null
+                        continue
+
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "SecurityException RFCOMM avec $methodName", e)
+                        socket?.close()
+                        socket = null
+                        continue
+
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Exception RFCOMM avec $methodName", e)
+                        socket?.close()
+                        socket = null
+                        continue
+                    }
+                }
+
+                Log.e(TAG, "Toutes les méthodes RFCOMM ont échoué")
+                return@withContext false
+
+            } finally {
+                try {
+                    socket?.close()
+                    Log.d(TAG, "Socket RFCOMM fermé")
+                } catch (e: IOException) {
+                    Log.e(TAG, "Erreur fermeture socket RFCOMM", e)
+                }
+            }
+        }
+    }
+
+    // Méthode de réflexion pour créer un socket RFCOMM sur un canal spécifique
+    private fun createRfcommSocketReflection(device: BluetoothDevice, channel: Int): BluetoothSocket? {
+        return try {
+            val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+            method.invoke(device, channel) as BluetoothSocket
+        } catch (e: Exception) {
+            Log.w(TAG, "Réflexion RFCOMM échouée pour canal $channel: ${e.message}")
+            null
         }
     }
 
@@ -406,6 +539,109 @@ class BluetoothManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Erreur envoi token FCM", e)
         }
+    }
+
+    // Fonction de test direct pour debug avec plus d'options
+    fun testDirectConnection(useRFCOMM: Boolean = false) {
+        scope.launch {
+            try {
+                val adapter = BluetoothAdapter.getDefaultAdapter()
+                val device = adapter.getRemoteDevice("C8:8A:9A:85:44:BC") // Votre serveur
+
+                Log.d(TAG, "=== TEST CONNEXION DIRECTE ===")
+                Log.d(TAG, "Device: ${device.address}")
+                Log.d(TAG, "Name: ${device.name}")
+                Log.d(TAG, "Bond state: ${device.bondState}")
+                Log.d(TAG, "Type: ${if (useRFCOMM) "RFCOMM" else "L2CAP"}")
+                Log.d(TAG, "Android version: ${android.os.Build.VERSION.SDK_INT}")
+
+                val success = if (useRFCOMM) {
+                    connectToRFCOMM(device)
+                } else {
+                    connectToL2CAP(device)
+                }
+
+                if (success) {
+                    Log.i(TAG, "✓ TEST DIRECT RÉUSSI !")
+                } else {
+                    Log.e(TAG, "❌ TEST DIRECT ÉCHOUÉ")
+
+                    // Si RFCOMM échoue, essayer les méthodes alternatives
+                    if (useRFCOMM) {
+                        Log.d(TAG, "Essai des méthodes alternatives RFCOMM...")
+                        testRFCOMMAlternatives(device)
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erreur test direct: ${e.javaClass.simpleName}: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private suspend fun testRFCOMMAlternatives(device: BluetoothDevice) {
+        // Test avec différents UUIDs
+        val uuids = listOf(
+            "00001101-0000-1000-8000-00805F9B34FB" to "Serial Port Profile",
+            "00001105-0000-1000-8000-00805F9B34FB" to "OBEX Object Push",
+            "0000110A-0000-1000-8000-00805F9B34FB" to "Audio Source",
+            "0000110B-0000-1000-8000-00805F9B34FB" to "Audio Sink"
+        )
+
+        for ((uuidString, description) in uuids) {
+            try {
+                Log.d(TAG, "Test UUID $description: $uuidString")
+                val uuid = UUID.fromString(uuidString)
+                val socket = device.createRfcommSocketToServiceRecord(uuid)
+
+                val connected = withTimeoutOrNull(10000) {
+                    socket.connect()
+                    socket.isConnected
+                } ?: false
+
+                if (connected) {
+                    Log.i(TAG, "✓ Connexion réussie avec $description")
+                    socket.outputStream.write("TEST_$description".toByteArray())
+                    delay(1000)
+                    socket.close()
+                    return // Sortir de la fonction si connexion réussie
+                }
+                socket.close()
+
+            } catch (e: Exception) {
+                Log.w(TAG, "Échec $description: ${e.message}")
+            }
+        }
+
+        // Test avec canaux directs
+        for (channel in 1..30) {
+            try {
+                Log.d(TAG, "Test canal RFCOMM direct: $channel")
+                val socket = createRfcommSocketReflection(device, channel)
+
+                if (socket != null) {
+                    val connected = withTimeoutOrNull(5000) {
+                        socket.connect()
+                        socket.isConnected
+                    } ?: false
+
+                    if (connected) {
+                        Log.i(TAG, "✓ Connexion réussie sur canal $channel")
+                        socket.outputStream.write("TEST_CANAL_$channel".toByteArray())
+                        delay(1000)
+                        socket.close()
+                        return // Sortir de la fonction si connexion réussie
+                    }
+                    socket.close()
+                }
+
+            } catch (e: Exception) {
+                Log.v(TAG, "Échec canal $channel: ${e.message}")
+            }
+        }
+
+        Log.e(TAG, "Toutes les alternatives RFCOMM ont échoué")
     }
 
     private fun hasBluetoothPermissions(): Boolean {

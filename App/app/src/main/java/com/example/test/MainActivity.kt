@@ -170,6 +170,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun testDirectConnection(useRFCOMM: Boolean) {
+        Log.d(TAG, "Test manuel: ${if (useRFCOMM) "RFCOMM" else "L2CAP"}")
+
+        // Envoyer commande au service
+        val intent = Intent(this, BluetoothAutoConnectService::class.java).apply {
+            putExtra("action", "test_connection")
+            putExtra("use_rfcomm", useRFCOMM)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopBluetoothService() {
+        Log.d(TAG, "Arrêt service Bluetooth")
+        val serviceIntent = Intent(this, BluetoothAutoConnectService::class.java)
+        stopService(serviceIntent)
+    }
+
     @Composable
     fun AppStatusScreen(modifier: Modifier = Modifier) {
         var bluetoothEnabled by remember { mutableStateOf(bluetoothAdapter?.isEnabled ?: false) }
@@ -267,7 +289,8 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = "✓ Configuration complète",
@@ -281,12 +304,98 @@ class MainActivity : ComponentActivity() {
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
 
+                    // Boutons de contrôle du service
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { startBluetoothService() }
+                        ) {
+                            Text("Démarrer Service")
+                        }
+
+                        Button(
+                            onClick = { stopBluetoothService() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Arrêter Service")
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Button(
-                        onClick = { startBluetoothService() }
+                    // Section Tests de Connexion
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
                     ) {
-                        Text("Redémarrer Service")
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Tests de Connexion",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            Text(
+                                text = "Tester la connexion directe au serveur",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { testDirectConnection(false) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Test L2CAP")
+                                }
+
+                                Button(
+                                    onClick = { testDirectConnection(true) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Test RFCOMM")
+                                }
+                            }
+
+                            Text(
+                                text = "Surveillez les logs pour voir les résultats",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+
+                    // Informations de debug
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = "Informations Debug",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "• Serveur cible: DCRWNIIR\n• PSM L2CAP: 0x1003\n• RFCOMM UUID: 00001101...\n• Adresse serveur: C8:8A:9A:85:44:BC",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                 }
             }

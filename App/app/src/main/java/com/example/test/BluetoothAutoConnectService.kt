@@ -10,7 +10,8 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.test.R
-import com.example.test.bluetooth.BluetoothManager
+import com.example.test.BluetoothManager
+import kotlinx.coroutines.*
 
 class BluetoothAutoConnectService : Service() {
 
@@ -20,6 +21,7 @@ class BluetoothAutoConnectService : Service() {
 
     private lateinit var bluetoothManager: BluetoothManager
     private var wakeLock: PowerManager.WakeLock? = null
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
@@ -41,6 +43,28 @@ class BluetoothAutoConnectService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service démarré")
+
+        // Vérifier si c'est une commande de test
+        val action = intent?.getStringExtra("action")
+        if (action == "test_connection") {
+            val useRFCOMM = intent.getBooleanExtra("use_rfcomm", false)
+            Log.d(TAG, "Commande de test reçue: ${if (useRFCOMM) "RFCOMM" else "L2CAP"}")
+            updateNotification("Test ${if (useRFCOMM) "RFCOMM" else "L2CAP"} en cours...")
+
+            serviceScope.launch {
+                bluetoothManager.testDirectConnection(useRFCOMM)
+                delay(5000)
+                updateNotification("Test terminé - Mode normal")
+            }
+            return START_STICKY
+        }
+
+        // Lancer le test automatique après un délai (seulement au premier démarrage)
+        serviceScope.launch {
+            delay(5000) // Attendre 5 secondes après le démarrage
+            launchDirectTest()
+        }
+
         return START_STICKY // Redémarrer automatiquement si tué
     }
 
@@ -49,6 +73,7 @@ class BluetoothAutoConnectService : Service() {
         Log.d(TAG, "Service détruit")
 
         bluetoothManager.cleanup()
+        serviceScope.cancel()
 
         wakeLock?.let {
             if (it.isHeld) {
@@ -74,6 +99,34 @@ class BluetoothAutoConnectService : Service() {
 
         bluetoothManager.initialize()
         updateNotification("Recherche du serveur...")
+    }
+
+    private fun launchDirectTest() {
+        Log.d(TAG, "=== LANCEMENT TEST DIRECT ===")
+        updateNotification("Test de connexion directe...")
+
+        serviceScope.launch {
+            try {
+                // Test L2CAP d'abord
+                Log.d(TAG, "🧪 Test connexion L2CAP...")
+                updateNotification("Test L2CAP...")
+                bluetoothManager.testDirectConnection(useRFCOMM = false)
+
+                // Attendre un peu puis tester RFCOMM
+                delay(10000)
+                Log.d(TAG, "🧪 Test connexion RFCOMM...")
+                updateNotification("Test RFCOMM...")
+                bluetoothManager.testDirectConnection(useRFCOMM = true)
+
+                // Retour au mode normal après les tests
+                delay(10000)
+                updateNotification("Tests terminés - Mode normal")
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Erreur lors des tests", e)
+                updateNotification("Tests échoués - Mode normal")
+            }
+        }
     }
 
     private fun createNotificationChannel() {
