@@ -23,30 +23,30 @@ class BluetoothAutoConnectService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Service créé")
+        Log.d(TAG, "Service created")
 
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification("Initialisation..."))
+        startForeground(NOTIFICATION_ID, createNotification("Initializing..."))
 
-        // Acquérir un wake lock partiel pour maintenir le service
+        // Acquire a partial wake lock to keep the service alive
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "BluetoothService::WakeLock"
         )
-        wakeLock?.acquire(60*60*1000L) // 1 heure max
+        wakeLock?.acquire(60 * 60 * 1000L) // Max 1 hour
 
         setupBluetoothManager()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Service démarré")
-        return START_STICKY // Redémarrer automatiquement si tué
+        Log.d(TAG, "Service started")
+        return START_STICKY // Automatically restart if killed
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "Service détruit")
+        Log.d(TAG, "Service destroyed")
 
         bluetoothManager.cleanup()
 
@@ -63,27 +63,27 @@ class BluetoothAutoConnectService : Service() {
         bluetoothManager = BluetoothManager(this)
 
         bluetoothManager.onDeviceConnected = { device ->
-            Log.i(TAG, "Device connecté: ${device.address}")
-            updateNotification("Connecté à ${device.address}")
+            Log.i(TAG, "Device connected: ${device.address}")
+            updateNotification("Connected to ${device.address}")
         }
 
         bluetoothManager.onConnectionFailed = { error ->
-            Log.w(TAG, "Connexion échouée: $error")
-            updateNotification("Recherche en cours... ($error)")
+            Log.w(TAG, "Connection failed: $error")
+            updateNotification("Searching... ($error)")
         }
 
         bluetoothManager.initialize()
-        updateNotification("Recherche du serveur...")
+        updateNotification("Searching for server...")
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Service Bluetooth",
+                "Bluetooth Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Service de connexion automatique Bluetooth"
+                description = "Automatic Bluetooth connection service"
                 setShowBadge(false)
             }
 

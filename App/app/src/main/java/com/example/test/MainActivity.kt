@@ -21,7 +21,6 @@ import com.example.test.ui.theme.TestTheme
 import com.example.test.BluetoothAutoConnectService
 import com.example.test.TokenStorage
 import com.example.test.FCMManager
-
 import android.util.Log
 
 class MainActivity : ComponentActivity() {
@@ -30,7 +29,7 @@ class MainActivity : ComponentActivity() {
     private val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
     private lateinit var fcmManager: FCMManager
 
-    // Permissions
+    // Required permissions
     private val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         arrayOf(
             Manifest.permission.BLUETOOTH_SCAN,
@@ -56,10 +55,10 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            Log.d(TAG, "Bluetooth activé")
+            Log.d(TAG, "Bluetooth enabled")
             startBluetoothService()
         } else {
-            Log.w(TAG, "Activation Bluetooth refusée")
+            Log.w(TAG, "Bluetooth activation denied")
         }
     }
 
@@ -68,10 +67,10 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         val allGranted = permissions.all { it.value }
         if (allGranted) {
-            Log.d(TAG, "Permissions Bluetooth accordées")
+            Log.d(TAG, "Bluetooth permissions granted")
             checkBluetoothAndStart()
         } else {
-            Log.w(TAG, "Permissions Bluetooth refusées")
+            Log.w(TAG, "Bluetooth permissions denied")
         }
     }
 
@@ -80,9 +79,9 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         val allGranted = permissions.all { it.value }
         if (allGranted) {
-            Log.d(TAG, "Permissions notifications accordées")
+            Log.d(TAG, "Notification permissions granted")
         } else {
-            Log.w(TAG, "Permissions notifications refusées")
+            Log.w(TAG, "Notification permissions denied")
         }
     }
 
@@ -90,10 +89,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Initialiser les managers
+        // Initialize managers
         fcmManager = FCMManager(this)
 
-        // Configuration
+        // Setup configuration
         setupNotificationPermissions()
         setupFCM()
         setupBluetooth()
@@ -123,13 +122,13 @@ class MainActivity : ComponentActivity() {
 
     private fun setupFCM() {
         fcmManager.initialize { token ->
-            Log.d(TAG, "Token FCM prêt: ${token.take(20)}...")
+            Log.d(TAG, "FCM token ready: ${token.take(20)}...")
         }
     }
 
     private fun setupBluetooth() {
         if (bluetoothAdapter == null) {
-            Log.e(TAG, "Bluetooth non supporté")
+            Log.e(TAG, "Bluetooth not supported")
             return
         }
 
@@ -142,7 +141,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (missingPermissions.isNotEmpty()) {
-            Log.d(TAG, "Demande permissions Bluetooth")
+            Log.d(TAG, "Requesting Bluetooth permissions")
             bluetoothPermissionLauncher.launch(missingPermissions.toTypedArray())
         } else {
             checkBluetoothAndStart()
@@ -153,14 +152,14 @@ class MainActivity : ComponentActivity() {
         if (bluetoothAdapter?.isEnabled == true) {
             startBluetoothService()
         } else {
-            Log.d(TAG, "Demande activation Bluetooth")
+            Log.d(TAG, "Requesting Bluetooth activation")
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             enableBluetoothLauncher.launch(enableBtIntent)
         }
     }
 
     private fun startBluetoothService() {
-        Log.d(TAG, "Démarrage service Bluetooth")
+        Log.d(TAG, "Starting Bluetooth service")
         val serviceIntent = Intent(this, BluetoothAutoConnectService::class.java)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -177,7 +176,7 @@ class MainActivity : ComponentActivity() {
         var notificationPermissions by remember { mutableStateOf(checkNotificationPermissions()) }
         var fcmToken by remember { mutableStateOf(TokenStorage.getToken(this@MainActivity)) }
 
-        // Mise à jour périodique des statuts
+        // Periodically update statuses
         LaunchedEffect(Unit) {
             while (true) {
                 bluetoothEnabled = bluetoothAdapter?.isEnabled ?: false
@@ -202,46 +201,46 @@ class MainActivity : ComponentActivity() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Statut Bluetooth
+            // Bluetooth status
             StatusCard(
                 title = "Bluetooth",
-                status = if (bluetoothEnabled) "Activé" else "Désactivé",
+                status = if (bluetoothEnabled) "Enabled" else "Disabled",
                 isOk = bluetoothEnabled,
-                details = "Nécessaire pour la connexion automatique"
+                details = "Required for automatic connection"
             )
 
-            // Statut Permissions Bluetooth
+            // Bluetooth permission status
             StatusCard(
-                title = "Permissions Bluetooth",
-                status = if (bluetoothPermissions) "Accordées" else "Manquantes",
+                title = "Bluetooth Permissions",
+                status = if (bluetoothPermissions) "Granted" else "Missing",
                 isOk = bluetoothPermissions,
-                details = "Scan et connexion Bluetooth + localisation"
+                details = "Required for scanning and connecting via Bluetooth + location access"
             )
 
-            // Statut Notifications
+            // Notification status
             StatusCard(
                 title = "Notifications",
-                status = if (notificationPermissions) "Activées" else "Désactivées",
+                status = if (notificationPermissions) "Enabled" else "Disabled",
                 isOk = notificationPermissions,
-                details = "Pour les messages FCM"
+                details = "Required for FCM messages"
             )
 
-            // Statut Token FCM
-            val tokenValue = fcmToken // Store in local variable for smart cast
+            // FCM token status
+            val tokenValue = fcmToken
             StatusCard(
-                title = "Token FCM",
-                status = if (tokenValue != null) "Disponible" else "En attente",
+                title = "FCM Token",
+                status = if (tokenValue != null) "Available" else "Pending",
                 isOk = tokenValue != null,
                 details = if (tokenValue != null) {
                     "Token: ${tokenValue.take(20)}..."
                 } else {
-                    "Le token sera envoyé lors de la connexion"
+                    "Token will be sent when connected"
                 }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Boutons d'action
+            // Action buttons
             val allReady = bluetoothEnabled && bluetoothPermissions && notificationPermissions
 
             if (!allReady) {
@@ -253,7 +252,7 @@ class MainActivity : ComponentActivity() {
                         Button(
                             onClick = { setupBluetooth() }
                         ) {
-                            Text("Configurer Bluetooth")
+                            Text("Configure Bluetooth")
                         }
                     }
 
@@ -261,7 +260,7 @@ class MainActivity : ComponentActivity() {
                         Button(
                             onClick = { setupNotificationPermissions() }
                         ) {
-                            Text("Activer Notifications")
+                            Text("Enable Notifications")
                         }
                     }
                 }
@@ -270,13 +269,13 @@ class MainActivity : ComponentActivity() {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "✓ Configuration complète",
+                        text = "✓ Fully Configured",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
 
                     Text(
-                        text = "Service actif - Recherche serveur toutes les 60s",
+                        text = "Service running - scanning every 60s",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
@@ -286,7 +285,7 @@ class MainActivity : ComponentActivity() {
                     Button(
                         onClick = { startBluetoothService() }
                     ) {
-                        Text("Redémarrer Service")
+                        Text("Restart Service")
                     }
                 }
             }
@@ -355,7 +354,7 @@ class MainActivity : ComponentActivity() {
                 ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
             }
         } else {
-            true // Pas de permissions requises sur les anciennes versions
+            true // No permissions required on older versions
         }
     }
 }

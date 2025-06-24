@@ -20,11 +20,11 @@ class BluetoothManager(private val context: Context) {
     private val TARGET_NAME = "DCRWNIIR"
     private val PSM = 0x1003
 
-    // Configuration optimisée pour économiser la batterie
-    private val SCAN_INTERVAL_MS = 60_000L // 1 minute au lieu de 5 secondes
-    private val SCAN_DURATION_MS = 12_000L // 12 secondes de scan actif
+    // Optimized configuration for battery saving
+    private val SCAN_INTERVAL_MS = 60_000L // 1 minute instead of 5 seconds
+    private val SCAN_DURATION_MS = 12_000L // 12 seconds active scanning
     private val MAX_CONNECTION_RETRIES = 3
-    private val CONNECTION_TIMEOUT_MS = 30_000L // 30 secondes timeout
+    private val CONNECTION_TIMEOUT_MS = 30_000L // 30 seconds timeout
 
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var isScanning = false
@@ -43,7 +43,7 @@ class BluetoothManager(private val context: Context) {
                     device?.let { handleDeviceFound(it) }
                 }
                 BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                    Log.d(TAG, "Scan terminé")
+                    Log.d(TAG, "Scan finished")
                     stopActiveScanning()
                     scheduleNextScan()
                 }
@@ -77,7 +77,7 @@ class BluetoothManager(private val context: Context) {
         try {
             context.registerReceiver(bluetoothReceiver, filter)
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur registration receiver", e)
+            Log.e(TAG, "Error registering receiver", e)
         }
 
         if (bluetoothAdapter?.isEnabled == true) {
@@ -92,43 +92,38 @@ class BluetoothManager(private val context: Context) {
         try {
             context.unregisterReceiver(bluetoothReceiver)
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur unregister receiver", e)
+            Log.e(TAG, "Error unregistering receiver", e)
         }
     }
 
     private fun startOptimizedScanning() {
         if (!hasBluetoothPermissions()) {
-            Log.e(TAG, "Permissions Bluetooth manquantes")
+            Log.e(TAG, "Missing Bluetooth permissions")
             return
         }
 
-        // Annuler le scan précédent
         scanJob?.cancel()
 
-        // Nouveau cycle de scan optimisé
         scanJob = scope.launch {
             while (isActive) {
                 try {
-                    Log.d(TAG, "Démarrage cycle de scan optimisé")
+                    Log.d(TAG, "Starting optimized scan cycle")
                     startActiveScanning()
 
-                    // Attendre la fin du scan ou timeout
                     delay(SCAN_DURATION_MS)
 
-                    // Arrêter le scan actif si toujours en cours
                     if (isScanning) {
                         stopActiveScanning()
                     }
 
-                    // Attendre avant le prochain cycle
-                    Log.d(TAG, "Attente ${SCAN_INTERVAL_MS / 1000}s avant prochain scan")
+                    Log.d(TAG, "Waiting ${SCAN_INTERVAL_MS / 1000}s before next scan")
                     delay(SCAN_INTERVAL_MS)
 
                 } catch (e: CancellationException) {
                     break
                 } catch (e: Exception) {
-                    Log.e(TAG, "Erreur durant le cycle de scan", e)
-                    delay(30_000) // Attendre 30s en cas d'erreur
+                    Log.e(TAG, "Error during scan cycle", e)
+                    delay(30_000)
                 }
             }
         }
@@ -137,7 +132,7 @@ class BluetoothManager(private val context: Context) {
     private fun startActiveScanning() {
         bluetoothAdapter?.let { adapter ->
             if (!adapter.isEnabled) {
-                Log.w(TAG, "Bluetooth désactivé")
+                Log.w(TAG, "Bluetooth is off")
                 return
             }
 
@@ -145,12 +140,12 @@ class BluetoothManager(private val context: Context) {
                 adapter.cancelDiscovery()
             }
 
-            Log.d(TAG, "Démarrage scan actif...")
+            Log.d(TAG, "Starting active scan...")
             isScanning = adapter.startDiscovery()
-            Log.d(TAG, "startDiscovery() lancé ? $isScanning")
+            Log.d(TAG, "startDiscovery() launched? $isScanning")
 
             if (!isScanning) {
-                Log.e(TAG, "Impossible de démarrer le scan")
+                Log.e(TAG, "Failed to start scanning")
             }
         }
     }
@@ -160,7 +155,7 @@ class BluetoothManager(private val context: Context) {
             if (isScanning && hasBluetoothPermissions()) {
                 adapter.cancelDiscovery()
                 isScanning = false
-                Log.d(TAG, "Scan actif arrêté")
+                Log.d(TAG, "Active scan stopped")
             }
         }
     }
@@ -171,8 +166,7 @@ class BluetoothManager(private val context: Context) {
     }
 
     private fun scheduleNextScan() {
-        // Le prochain scan est déjà programmé dans la boucle principale
-        Log.d(TAG, "Prochain scan programmé dans ${SCAN_INTERVAL_MS / 1000}s")
+        Log.d(TAG, "Next scan scheduled in ${SCAN_INTERVAL_MS / 1000}s")
     }
 
     private fun handleDeviceFound(device: BluetoothDevice) {
@@ -180,22 +174,21 @@ class BluetoothManager(private val context: Context) {
 
         val deviceName = try { device.name } catch (e: SecurityException) { "Unknown" }
 
-        // Log plus discret pour éviter le spam
         if (deviceName?.contains(TARGET_NAME, ignoreCase = true) == true) {
-            Log.i(TAG, "Serveur cible trouvé: $deviceName - ${device.address}")
-            stopActiveScanning() // Arrêter immédiatement pour économiser
+            Log.i(TAG, "Target device found: $deviceName - ${device.address}")
+            stopActiveScanning()
 
             when (device.bondState) {
                 BluetoothDevice.BOND_BONDED -> {
-                    Log.d(TAG, "Device déjà appairé")
+                    Log.d(TAG, "Device already paired")
                     attemptConnection(device)
                 }
                 BluetoothDevice.BOND_NONE -> {
-                    Log.d(TAG, "Démarrage appairage")
+                    Log.d(TAG, "Starting pairing")
                     startPairing(device)
                 }
                 BluetoothDevice.BOND_BONDING -> {
-                    Log.d(TAG, "Appairage en cours")
+                    Log.d(TAG, "Pairing in progress")
                 }
             }
         }
@@ -206,15 +199,15 @@ class BluetoothManager(private val context: Context) {
 
         scope.launch {
             try {
-                Log.d(TAG, "Tentative d'appairage avec ${device.address}")
+                Log.d(TAG, "Trying to pair with ${device.address}")
                 val success = device.createBond()
                 if (!success) {
-                    Log.e(TAG, "Échec demande d'appairage")
-                    onConnectionFailed?.invoke("Échec appairage")
+                    Log.e(TAG, "Pairing request failed")
+                    onConnectionFailed?.invoke("Pairing failed")
                 }
             } catch (e: SecurityException) {
-                Log.e(TAG, "Permission manquante pour l'appairage", e)
-                onConnectionFailed?.invoke("Permission manquante")
+                Log.e(TAG, "Missing permission for pairing", e)
+                onConnectionFailed?.invoke("Missing permission")
             }
         }
     }
@@ -228,13 +221,13 @@ class BluetoothManager(private val context: Context) {
 
         when (bondState) {
             BluetoothDevice.BOND_BONDED -> {
-                Log.i(TAG, "Appairage réussi!")
-                connectionRetries = 0 // Reset compteur
+                Log.i(TAG, "Pairing successful!")
+                connectionRetries = 0
                 attemptConnection(device)
             }
             BluetoothDevice.BOND_NONE -> {
-                Log.w(TAG, "Appairage échoué")
-                onConnectionFailed?.invoke("Appairage échoué")
+                Log.w(TAG, "Pairing failed")
+                onConnectionFailed?.invoke("Pairing failed")
             }
         }
     }
@@ -243,11 +236,11 @@ class BluetoothManager(private val context: Context) {
         scope.launch {
             try {
                 if (device.bondState != BluetoothDevice.BOND_BONDED) {
-                    Log.w(TAG, "Device pas appairé")
+                    Log.w(TAG, "Device not paired")
                     return@launch
                 }
 
-                Log.d(TAG, "Tentative connexion L2CAP (essai ${connectionRetries + 1}/$MAX_CONNECTION_RETRIES)")
+                Log.d(TAG, "Attempting L2CAP connection (try ${connectionRetries + 1}/$MAX_CONNECTION_RETRIES)")
                 val success = connectToL2CAP(device)
 
                 if (success) {
@@ -256,19 +249,19 @@ class BluetoothManager(private val context: Context) {
                 } else {
                     connectionRetries++
                     if (connectionRetries < MAX_CONNECTION_RETRIES) {
-                        Log.w(TAG, "Nouvelle tentative dans 5s...")
+                        Log.w(TAG, "Retrying in 5s...")
                         delay(5000)
                         attemptConnection(device)
                     } else {
-                        Log.e(TAG, "Connexion échouée après $MAX_CONNECTION_RETRIES tentatives")
-                        onConnectionFailed?.invoke("Connexion impossible")
+                        Log.e(TAG, "Failed after $MAX_CONNECTION_RETRIES attempts")
+                        onConnectionFailed?.invoke("Unable to connect")
                         connectionRetries = 0
                     }
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "Erreur tentative connexion", e)
-                onConnectionFailed?.invoke("Erreur connexion: ${e.message}")
+                Log.e(TAG, "Error during connection attempt", e)
+                onConnectionFailed?.invoke("Connection error: ${e.message}")
             }
         }
     }
@@ -277,7 +270,7 @@ class BluetoothManager(private val context: Context) {
         if (!hasBluetoothPermissions()) return false
 
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
-            Log.e(TAG, "L2CAP nécessite Android 10+")
+            Log.e(TAG, "L2CAP requires Android 10+")
             return false
         }
 
@@ -285,97 +278,89 @@ class BluetoothManager(private val context: Context) {
 
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "=== DÉBUT CONNEXION L2CAP ===")
+                Log.d(TAG, "=== STARTING L2CAP CONNECTION ===")
                 Log.d(TAG, "Device: ${device.address}")
                 Log.d(TAG, "PSM: 0x${PSM.toString(16)} ($PSM)")
                 Log.d(TAG, "Bond state: ${device.bondState}")
 
-                // Arrêter le scan pendant la connexion pour éviter les interférences
                 stopActiveScanning()
 
-                // Créer le socket L2CAP
                 socket = device.createL2capChannel(PSM)
-                Log.d(TAG, "Socket L2CAP créé avec succès")
+                Log.d(TAG, "L2CAP socket created successfully")
 
-                // Connexion avec timeout
                 val connectJob = async {
                     socket?.connect()
-                    Log.i(TAG, "socket.connect() terminé avec succès")
+                    Log.i(TAG, "socket.connect() completed successfully")
                 }
 
-                // Attendre la connexion avec timeout
                 withTimeoutOrNull(CONNECTION_TIMEOUT_MS) {
                     connectJob.await()
                 } ?: run {
-                    Log.e(TAG, "Timeout de connexion après ${CONNECTION_TIMEOUT_MS}ms")
+                    Log.e(TAG, "Connection timeout after ${CONNECTION_TIMEOUT_MS}ms")
                     connectJob.cancel()
                     return@withContext false
                 }
 
-                // Vérifier l'état de la connexion
                 if (socket?.isConnected == true) {
-                    Log.i(TAG, "Connexion L2CAP établie avec succès!")
+                    Log.i(TAG, "L2CAP connection established successfully!")
 
-                    // Envoyer token FCM au serveur
                     sendFCMTokenToServer(socket)
 
-                    // Maintenir connexion pour test
                     delay(10000)
 
                     true
                 } else {
-                    Log.e(TAG, "socket.isConnected = false après connect()")
+                    Log.e(TAG, "socket.isConnected = false after connect()")
                     false
                 }
 
             } catch (e: IOException) {
-                Log.e(TAG, "IOException lors de la connexion L2CAP", e)
-                Log.e(TAG, "Message d'erreur: ${e.message}")
+                Log.e(TAG, "IOException during L2CAP connection", e)
+                Log.e(TAG, "Error message: ${e.message}")
                 Log.e(TAG, "Cause: ${e.cause}")
 
-                // Détails spécifiques selon le message d'erreur
                 when {
                     e.message?.contains("Connection refused") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Serveur refuse la connexion - vérifiez qu'il écoute sur PSM $PSM")
+                        Log.e(TAG, "DIAGNOSIS: Server refused connection - check it’s listening on PSM $PSM")
                     }
                     e.message?.contains("Host is down") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Serveur inaccessible - vérifiez qu'il est démarré")
+                        Log.e(TAG, "DIAGNOSIS: Server unreachable - make sure it is running")
                     }
                     e.message?.contains("Permission denied") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Permission refusée - vérifiez les permissions")
+                        Log.e(TAG, "DIAGNOSIS: Permission denied - check app permissions")
                     }
                     e.message?.contains("Service discovery failed") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Service non trouvé - PSM $PSM incorrect ?")
+                        Log.e(TAG, "DIAGNOSIS: Service not found - is PSM $PSM correct?")
                     }
                     e.message?.contains("read failed") == true -> {
-                        Log.e(TAG, "DIAGNOSTIC: Échec lecture socket - connexion fermée côté serveur")
+                        Log.e(TAG, "DIAGNOSIS: Socket read failed - server closed the connection")
                     }
                     else -> {
-                        Log.e(TAG, "DIAGNOSTIC: Erreur inconnue - vérifiez serveur et configuration")
+                        Log.e(TAG, "DIAGNOSIS: Unknown error - check server and configuration")
                     }
                 }
                 false
 
             } catch (e: SecurityException) {
-                Log.e(TAG, "SecurityException - Permission L2CAP manquante", e)
+                Log.e(TAG, "SecurityException - Missing L2CAP permission", e)
                 false
 
             } catch (e: IllegalArgumentException) {
-                Log.e(TAG, "IllegalArgumentException - PSM invalide ou device invalide", e)
-                Log.e(TAG, "PSM utilisé: $PSM (0x${PSM.toString(16)})")
+                Log.e(TAG, "IllegalArgumentException - Invalid PSM or device", e)
+                Log.e(TAG, "Used PSM: $PSM (0x${PSM.toString(16)})")
                 false
 
             } catch (e: Exception) {
-                Log.e(TAG, "Exception inattendue", e)
+                Log.e(TAG, "Unexpected exception", e)
                 false
 
             } finally {
-                Log.d(TAG, "=== FIN TENTATIVE CONNEXION ===")
+                Log.d(TAG, "=== END L2CAP CONNECTION ATTEMPT ===")
                 try {
                     socket?.close()
-                    Log.d(TAG, "Socket fermé")
+                    Log.d(TAG, "Socket closed")
                 } catch (e: IOException) {
-                    Log.e(TAG, "Erreur fermeture socket", e)
+                    Log.e(TAG, "Error closing socket", e)
                 }
             }
         }
@@ -388,23 +373,22 @@ class BluetoothManager(private val context: Context) {
                 val message = "FCM_TOKEN:$token"
                 socket.outputStream.write(message.toByteArray())
                 socket.outputStream.flush()
-                Log.d(TAG, "Token FCM envoyé au serveur")
+                Log.d(TAG, "FCM token sent to server")
 
-                // Lire confirmation avec timeout
                 withTimeoutOrNull(5000) {
                     val buffer = ByteArray(1024)
                     val bytesRead = socket.inputStream.read(buffer)
                     if (bytesRead > 0) {
                         val response = String(buffer, 0, bytesRead)
-                        Log.d(TAG, "Réponse serveur: $response")
+                        Log.d(TAG, "Server response: $response")
                     }
-                } ?: Log.w(TAG, "Timeout lecture réponse serveur")
+                } ?: Log.w(TAG, "Timeout reading server response")
 
             } else {
-                Log.w(TAG, "Token FCM introuvable ou socket null")
+                Log.w(TAG, "FCM token not found or socket null")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur envoi token FCM", e)
+            Log.e(TAG, "Error sending FCM token", e)
         }
     }
 
