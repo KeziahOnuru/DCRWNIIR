@@ -1,48 +1,48 @@
-# Makefile pour FCM Door Close Reminder
+# Makefile for FCM Door Close Reminder
 
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -D_GNU_SOURCE
 LIBS = -lcurl -ljson-c -lssl -lcrypto
 
-# Noms des fichiers
+# File names
 TARGET = door_reminder
 SOURCES = main.c fcm_token.c fcm_notification.c
 OBJECTS = $(SOURCES:.c=.o)
 HEADERS = fcm_token.h fcm_notification.h
 
-# Règle par défaut
+# Default rule
 all: $(TARGET)
 
-# Compilation du programme principal
+# Compile the main program
 $(TARGET): $(OBJECTS)
 	$(CC) $(OBJECTS) -o $(TARGET) $(LIBS)
 
-# Compilation des fichiers objets
+# Compile object files
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Nettoyage
+# Clean build artifacts
 clean:
 	rm -f $(OBJECTS) $(TARGET)
 
-# Installation des dépendances (Ubuntu/Debian)
+# Install dependencies (Ubuntu/Debian)
 install-deps:
 	sudo apt-get update
 	sudo apt-get install -y libcurl4-openssl-dev libjson-c-dev libssl-dev build-essential
 
-# Test de compilation
+# Test build
 test: $(TARGET)
-	@echo "Compilation réussie!"
-	@echo "Pour tester, assurez-vous d'avoir le fichier JSON du compte de service."
+	@echo "Compilation successful!"
+	@echo "To test, make sure the service account JSON file is available."
 
-# Aide
+# Help
 help:
-	@echo "Commandes disponibles:"
-	@echo "  make                 - Compile le programme"
-	@echo "  make clean          - Supprime les fichiers compilés"
-	@echo "  make install-deps   - Installe les dépendances (Ubuntu/Debian)"
-	@echo "  make install-deps-rpm - Installe les dépendances (CentOS/RHEL/Fedora)"
-	@echo "  make test           - Teste la compilation"
-	@echo "  make help           - Affiche cette aide"
+	@echo "Available commands:"
+	@echo "  make                  - Compiles the program"
+	@echo "  make clean            - Removes compiled files"
+	@echo "  make install-deps     - Installs dependencies (Ubuntu/Debian)"
+	@echo "  make install-deps-rpm - Installs dependencies (CentOS/RHEL/Fedora)"
+	@echo "  make test             - Tests compilation"
+	@echo "  make help             - Shows this help message"
 
 .PHONY: all clean install-deps install-deps-rpm test help
