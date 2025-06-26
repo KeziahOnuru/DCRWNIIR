@@ -218,8 +218,123 @@ static char* create_jwt(const char* client_email, const char* private_key_str) {
     return jwt;
 }
 
+// Function to extract access token from JSON response
 static char* extract_access_token(const char* json_response) {
     json_object *root = json_tokener_parse(json_response);
     if (!root) return NULL;
+    
+    json_object *access_token_obj;
+    if (!json_object_object_get_ex(root, "access_token", &access_token_obj)) {
+        json_object_put(root);
+        return NULL;
+    }
+    
+    const char* token = json_object_get_string(access_token_obj);
+    char* result = strdup(token);
+    
+    json_object_put(root);
+    return result;
+}
 
-    json_object *acces*_
+// Main function to obtain OAuth2 token
+char* get_fcm_oauth_token(const char* service_account_file) {
+    // Check that the service account file exists
+    FILE *test_file = fopen(service_account_file, "r");
+    if (!test_file) {
+        printf("Error: file %s not found\n", service_account_file);
+        printf("Make sure the service account JSON file is present.\n");
+        return NULL;
+    }
+    fclose(test_file);
+    
+    // Read the service account JSON file
+    FILE *file = fopen(service_account_file, "r");
+    if (!file) {
+        printf("Error: unable to open file %s\n", service_account_file);
+        return NULL;
+    }
+    
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    char *json_content = malloc(file_size + 1);
+    fread(json_content, 1, file_size, file);
+    json_content[file_size] = '\0';
+    fclose(file);
+    
+    // Parse the JSON
+    json_object *root = json_tokener_parse(json_content);
+    free(json_content);
+    
+    if (!root) {
+        printf("Error: invalid JSON\n");
+        return NULL;
+    }
+    
+    // Extract client_email and private_key
+    json_object *client_email_obj, *private_key_obj;
+    if (!json_object_object_get_ex(root, "client_email", &client_email_obj) ||
+        !json_object_object_get_ex(root, "private_key", &private_key_obj)) {
+        printf("Error: missing fields in JSON\n");
+        json_object_put(root);
+        return NULL;
+    }
+    
+    const char* client_email = json_object_get_string(client_email_obj);
+    const char* private_key = json_object_get_string(private_key_obj);
+    
+    // Create the JWT
+    char* jwt = create_jwt(client_email, private_key);
+    json_object_put(root);
+    
+    if (!jwt) {
+        printf("Error: unable to create JWT\n");
+        return NULL;
+    }
+    
+    // Exchange JWT for access token
+    CURL *curl;
+    CURLcode res;
+    struct APIResponse response = {0};
+    
+    curl = curl_easy_init();
+    if (!curl) {
+        printf("Error: unable to initialize CURL\n");
+        free(jwt);
+        return NULL;
+    }
+    
+    // Prepare POST data
+    char post_data[MAX_JWT_SIZE + 200];
+    snprintf(post_data, sizeof(post_data),
+        "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=%s", jwt);
+    
+    // Configure CURL
+    curl_easy_setopt(curl, CURLOPT_URL, "https://oauth2.googleapis.com/token");
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    
+    // Execute the request
+    res = curl_easy_perform(curl);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+    free(jwt);
+    
+    if (res != CURLE_OK) {
+        printf("CURL error: %s\n", curl_easy_strerror(res));
+        if (response.data) free(response.data);
+        return NULL;
+    }
+    
+    // Extract the access token
+    char* access_token = extract_access_token(response.data);
+    free(response.data);
+    
+    return access_token;
+}
