@@ -19,7 +19,7 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, struct AP
     size_t realsize = size * nmemb;
     char *ptr = realloc(response->data, response->size + realsize + 1);
     if (!ptr) {
-        printf("Oops: not enough memory (realloc failed)\n");
+        printf("Error: insufficient memory (realloc failed)\n");
         return 0;
     }
 
@@ -37,7 +37,7 @@ static char* create_fcm_message_json(const char* app_token, const char* title,
     json_object *message = json_object_new_object();
     json_object *notification = json_object_new_object();
 
-    // Add where the message should go
+    // Add destination for the message
     json_object_object_add(message, "token", json_object_new_string(app_token));
 
     // Add title and message text
@@ -45,7 +45,7 @@ static char* create_fcm_message_json(const char* app_token, const char* title,
     json_object_object_add(notification, "body", json_object_new_string(body));
     json_object_object_add(message, "notification", notification);
 
-    // Add extra data
+    // Add additional data
     if (data_type && strlen(data_type) > 0) {
         json_object *data = json_object_new_object();
         json_object_object_add(data, "type", json_object_new_string(data_type));
@@ -55,31 +55,31 @@ static char* create_fcm_message_json(const char* app_token, const char* title,
     // Add the message to the main JSON object
     json_object_object_add(root, "message", message);
 
-    // Convert everything to text
+    // Convert to JSON string
     const char* json_string = json_object_to_json_string(root);
     char* result = strdup(json_string);
 
-    // Free up memory
+    // Free memory
     json_object_put(root);
     return result;
 }
 
-// Actually sends the notification to FCM
+// Sends the notification to FCM
 int send_fcm_notification(const char* oauth_token, const char* app_token, 
                          const char* title, const char* body, 
                          const char* data_type, const char* project_id) {
     if (!oauth_token || !app_token || !title || !body || !project_id) {
-        printf("Uh-oh: missing something important\n");
+        printf("Error: missing required parameters\n");
         return -1;
     }
 
     char* message_json = create_fcm_message_json(app_token, title, body, data_type);
     if (!message_json) {
-        printf("Uh-oh: couldn’t make JSON\n");
+        printf("Error: failed to create JSON message\n");
         return -1;
     }
 
-    printf("Here's the message JSON: %s\n", message_json);
+    printf("FCM message JSON: %s\n", message_json);
 
     CURL *curl;
     CURLcode res;
@@ -87,7 +87,7 @@ int send_fcm_notification(const char* oauth_token, const char* app_token,
 
     curl = curl_easy_init();
     if (!curl) {
-        printf("Oops: couldn’t start curl\n");
+        printf("Error: failed to initialize curl\n");
         free(message_json);
         return -1;
     }
@@ -100,12 +100,12 @@ int send_fcm_notification(const char* oauth_token, const char* app_token,
     headers = curl_slist_append(headers, auth_header);
     headers = curl_slist_append(headers, "Content-Type: application/json; UTF-8");
 
-    // Build the URL to talk to FCM
+    // Build the FCM API URL
     char fcm_url[512];
     snprintf(fcm_url, sizeof(fcm_url), 
              "https://fcm.googleapis.com/v1/projects/%s/messages:send", project_id);
 
-    // Tell curl what to do
+    // Configure curl options
     curl_easy_setopt(curl, CURLOPT_URL, fcm_url);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, message_json);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -124,46 +124,46 @@ int send_fcm_notification(const char* oauth_token, const char* app_token,
     free(message_json);
 
     if (res != CURLE_OK) {
-        printf("Curl messed up: %s\n", curl_easy_strerror(res));
+        printf("Curl error: %s\n", curl_easy_strerror(res));
         if (response.data) free(response.data);
         return -1;
     }
 
-    printf("Server said: HTTP %ld\n", response_code);
+    printf("HTTP response code: %ld\n", response_code);
     if (response.data) {
         printf("Server response: %s\n", response.data);
         free(response.data);
     }
 
     if (response_code == 200) {
-        printf("Nice! Notification sent.\n");
+        printf("Notification sent successfully\n");
         return 0;
     } else {
-        printf("Bummer... notification failed.\n");
+        printf("Notification sending failed\n");
         return -1;
     }
 }
 
 int send_door_close_reminder(const char* app_token, const char* service_account_file) {
     if (!app_token || !service_account_file) {
-        printf("Uh-oh: missing arguments\n");
+        printf("Error: missing required arguments\n");
         return -1;
     }
 
-    printf("Getting OAuth token...\n");
+    printf("Obtaining OAuth token...\n");
     char* oauth_token = get_fcm_oauth_token(service_account_file);
     if (!oauth_token) {
-        printf("Couldn’t get OAuth token\n");
+        printf("Failed to obtain OAuth token\n");
         return -1;
     }
 
-    printf("Got the token!\n");
+    printf("OAuth token obtained successfully\n");
 
     int result = send_fcm_notification(
         oauth_token,
         app_token,
         "Door-close reminder",
-        "Room 508 : Don't forget to close the door !",
+        "Room 809 : Don't forget to close the door !",
         "door-close-reminder",
         "door-close-reminder"
     );
