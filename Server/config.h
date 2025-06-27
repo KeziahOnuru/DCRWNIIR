@@ -25,7 +25,7 @@
 #define FCM_NOTIFICATION_TITLE "Door-close reminder"
 
 /// FCM notification body text
-#define FCM_NOTIFICATION_BODY "Room 508 : Don't forget to close the door !"
+#define FCM_NOTIFICATION_BODY "Room 809 : Don't forget to close the door !"
 
 /// FCM notification data type identifier
 #define FCM_NOTIFICATION_DATA_TYPE "door-close-reminder"
