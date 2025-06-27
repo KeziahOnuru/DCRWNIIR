@@ -5,20 +5,37 @@ Door-close reminder when nobody is in room
 ## Current Structure
 
 ```
-.
-├── main.c                                 # Main program
-├── fcm_token.h                            # Header for OAuth2 authentification
-├── fcm_token.c                            # OAuth2 + JWT implementation
-├── fcm_notification.h                     # Header for FCM notifications
-├── fcm_notification.c                     # FCM notifications implementation
-├── Makefile                               # Compilation file
-└── door-close-reminder-79f888941429.json  # Service account JSON file
+Server/
+├── config.h                          # Centralized configuration
+├── Makefile                          # Modular build system
+│
+├── Bluetooth_Host/                   # BLE Communication & Management
+│   ├── main.c                        # System entry point
+│   ├── logger.c                      # Logging implementation
+│   ├── logger.h                      # Logging interface
+│   ├── device_manager.c              # Device management implementation
+│   ├── device_manager.h              # Device management interface
+│   ├── bluetooth_server.c            # Bluetooth server implementation
+│   ├── bluetooth_server.h            # Bluetooth server interface
+│   └── BLEHost.h                     # Main system header
+│   
+├── Driver/                           # Hardware Drivers
+│   ├── DoorStateDriver.c             # GPIO door sensor
+│   └── DoorStateDriver.h             # Door sensor interface
+│   
+└── Send_notification/                # Cloud Messaging
+    ├── fcm_notification.c            # FCM implementation
+    ├── fcm_notification.h            # FCM interface
+    ├── fcm_token.c                   # OAuth token management
+    ├── fcm_token.h                   # Token interface
+    └── firebase-service-account.json # Firebase credentials
 ```
 
 ## Dependencies
 ```bash
 sudo apt-get update
 sudo apt-get install -y libcurl4-openssl-dev libjson-c-dev libssl-dev build-essential
+-lbluetooth
 ```
 
 # App
